@@ -1,0 +1,4 @@
+metastore_db/
+target/
+dependency-reduced-pom.xml
+*.log

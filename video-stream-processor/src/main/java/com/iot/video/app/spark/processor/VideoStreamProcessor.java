@@ -103,7 +103,7 @@ public class VideoStreamProcessor {
 		      .outputMode("update")
 		      .format("console")
 		      .start();
-	 
+			  
 	 //await
      query.awaitTermination();
 	}

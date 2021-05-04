@@ -1,0 +1,79 @@
+Bootstrap: library
+From: library/default/centos:8 
+
+%environment
+    export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk
+    export PATH=$JAVA_HOME/bin:$PATH
+    export JAVA_AWT_INCLUDE_PATH=$JAVA_HOME
+    export ZOOKEEPER_HOME=/opt/zookeeper
+    export KAFKA_HOME=/opt/kafka
+    export MAVEN_HOME=/opt/maven
+    export PATH="$PATH:$ZOOKEEPER_HOME/bin:$KAFKA_HOME/bin:$MAVEN_HOME/bin"
+
+%post
+    mkdir /scratch /data0 # Required for later mounts
+    APACHE_DIST_URLS=(
+        "https://www.apache.org/dyn/closer.cgi?action=download&filename=" \
+        # if the version is outdated (or we're grabbing the .asc file), we might have to pull from the dist/archive :/
+        "https://www-us.apache.org/dist/" \
+        "https://www.apache.org/dist/" \
+        "https://archive.apache.org/dist/")
+    
+    ZOOKEEPER_VERSION=3.4.8
+    KAFKA_VERSION=0.10.2.0
+    KAFKA_BASE_VERSION=2.11
+    MAVEN_VERSION=3.2.2 # 3.3.9 in docs is not avaialbe
+
+    export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk
+    export PATH=$JAVA_HOME/bin:$PATH
+    export ZOOKEEPER_HOME=/opt/zookeeper
+    export MAVEN_HOME=/opt/maven
+    export KAFKA_HOME=/opt/kafka
+    export PATH="$PATH:$ZOOKEEPER_HOME/bin:$KAFKA_HOME/bin:$MAVEN_HOME/bin"
+
+    dnf install -y epel-release dnf-utils && \
+    yum-config-manager -y --set-enabled PowerTools && \
+    yum-config-manager -y --add-repo=https://negativo17.org/repos/epel-multimedia.repo 
+
+    yum install -y java-1.8.0-openjdk-devel ffmpeg-devel vim ant tar python3 git cmake make hostname gcc-c++ wget && \
+        set -eux; \
+        download() { \
+            local f="$1"; shift; \
+            local distFile="$1"; shift; \
+            local success=; \
+            local distUrl=; \
+            for distUrl in ${APACHE_DIST_URLS[@]}; do \
+            if wget -nv -O "$f" "$distUrl$distFile"; then \
+                success=1; \
+                break; \
+            fi; \
+            done; \
+            [ -n "$success" ]; \
+        }; \
+        \
+        download "maven.tar.gz" "maven/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz"; \
+        download "zookeeper.tar.gz" "zookeeper/zookeeper-$ZOOKEEPER_VERSION/zookeeper-$ZOOKEEPER_VERSION.tar.gz"; \
+        download "kafka.tar.gz" "kafka/$KAFKA_VERSION/kafka_$KAFKA_BASE_VERSION-$KAFKA_VERSION.tgz"; \
+        tar xzf kafka.tar.gz -C /tmp/ && \
+        tar xzf zookeeper.tar.gz -C /tmp/ && \
+        tar xzf maven.tar.gz -C /tmp/ && \
+        mv /tmp/apache-maven-$MAVEN_VERSION $MAVEN_HOME && \
+        mv /tmp/zookeeper-$ZOOKEEPER_VERSION $ZOOKEEPER_HOME && \
+        mv /tmp/kafka_$KAFKA_BASE_VERSION-$KAFKA_VERSION $KAFKA_HOME && \
+        rm -rf /*gz
+    
+    wget -nv -O "opencv.tar.gz" https://github.com/opencv/opencv/archive/refs/tags/3.4.14.tar.gz && \
+        wget -nv -O "opencv_contrib.tar.gz" https://github.com/opencv/opencv_contrib/archive/refs/tags/3.4.14.tar.gz && \
+        tar xzf opencv.tar.gz -C /tmp && \
+        tar xzf opencv_contrib.tar.gz -C /tmp && \
+        cd /tmp/opencv-3.4.14 && mkdir -p build && cd build && \
+        cmake -D CMAKE_BUILD_TYPE=RELEASE \
+            -D CMAKE_INSTALL_PREFIX=/usr/ \
+            -D OPENCV_GENERATE_PKGCONFIG=ON \
+            -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib-3.4.14/modules .. && \
+        make -j8 && make install && \
+        cp bin/*.jar / && \
+        mv lib/* /usr/lib && \
+        echo "/usr/lib" > /etc/ld.so.conf.d/opencv.conf && \
+        ldconfig -v
+                
